@@ -1,0 +1,26 @@
+cmake
+Cython
+librosa==0.8.0
+matplotlib
+numpy
+numba
+scipy
+Unidecode
+tensorboardX
+tqdm
+packaging
+pyaudio
+langdetect
+inflect
+pydantic
+jamo
+pypinyin
+jieba
+tensorboard
+# ipython for notebook inference
+ipython
+# ONNX
+onnx
+onnxruntime
+
+# install pytorch torchvision torchaudio pytorch-cuda=12.1 -c pytorch -c nvidia
