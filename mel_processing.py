@@ -66,12 +66,13 @@ def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False)
 
     if version.parse(torch.__version__) >= version.parse("2"):
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
-                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=False)
+                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)
+        spec = torch.abs(spec) + 1e-6
     else:
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                       center=center, pad_mode='reflect', normalized=False, onesided=True)
+        spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
         
-    spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
     return spec
 
 
@@ -108,10 +109,12 @@ def mel_spectrogram_torch(y, n_fft, num_mels, sampling_rate, hop_size, win_size,
 
     if version.parse(torch.__version__) >= version.parse("2"):
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
-                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=False)
+                          center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)
+        spec = torch.abs(spec) + 1e-6
     else:
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                       center=center, pad_mode='reflect', normalized=False, onesided=True)
+        spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
     '''
     #- reserve : from https://github.com/jaywalnut310/vits/issues/15#issuecomment-1084148441
     with autocast(enabled=False):
@@ -119,8 +122,6 @@ def mel_spectrogram_torch(y, n_fft, num_mels, sampling_rate, hop_size, win_size,
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                         center=center, pad_mode='reflect', normalized=False, onesided=True)
     '''
-
-    spec = torch.sqrt(spec.pow(2).sum(-1) + 1e-6)
 
     spec = torch.matmul(mel_basis[fmax_dtype_device], spec)
     spec = spectral_normalize_torch(spec)
