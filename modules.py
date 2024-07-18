@@ -7,7 +7,8 @@ from torch import nn
 from torch.nn import functional as F
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
-from torch.nn.utils import weight_norm, remove_weight_norm
+from torch.nn.utils.parametrizations import weight_norm 
+from torch.nn.utils import remove_weight_norm
 
 import commons
 from commons import init_weights, get_padding
@@ -125,14 +126,14 @@ class WN(torch.nn.Module):
 
     if gin_channels != 0:
       cond_layer = torch.nn.Conv1d(gin_channels, 2*hidden_channels*n_layers, 1)
-      self.cond_layer = torch.nn.utils.weight_norm(cond_layer, name='weight')
+      self.cond_layer = weight_norm(cond_layer, name='weight')
 
     for i in range(n_layers):
       dilation = dilation_rate ** i
       padding = int((kernel_size * dilation - dilation) / 2)
       in_layer = torch.nn.Conv1d(hidden_channels, 2*hidden_channels, kernel_size,
                                  dilation=dilation, padding=padding)
-      in_layer = torch.nn.utils.weight_norm(in_layer, name='weight')
+      in_layer = weight_norm(in_layer, name='weight')
       self.in_layers.append(in_layer)
 
       # last one is not necessary
@@ -142,7 +143,7 @@ class WN(torch.nn.Module):
         res_skip_channels = hidden_channels
 
       res_skip_layer = torch.nn.Conv1d(hidden_channels, res_skip_channels, 1)
-      res_skip_layer = torch.nn.utils.weight_norm(res_skip_layer, name='weight')
+      res_skip_layer = weight_norm(res_skip_layer, name='weight')
       self.res_skip_layers.append(res_skip_layer)
 
   def forward(self, x, x_mask, g=None, **kwargs):

@@ -4,7 +4,7 @@ from text.korean import latin_to_hangul, number_to_hangul, divide_hangul, korean
 from g2pk2 import G2p
 from text.mandarin import number_to_chinese, chinese_to_bopomofo, latin_to_bopomofo, chinese_to_romaji, chinese_to_lazy_ipa, chinese_to_ipa, chinese_to_ipa2
 #from text.sanskrit import devanagari_to_ipa
-from text.english import english_to_ipa, english_to_lazy_ipa, english_to_ipa2, english_to_lazy_ipa2
+from text.english import english_to_ipa, english_to_lazy_ipa, english_to_ipa2, english_to_lazy_ipa2, normalize_numbers
 #from text.thai import num_to_thai, latin_to_thai
 #from text.shanghainese import shanghainese_to_ipa
 #from text.cantonese import cantonese_to_ipa
@@ -91,6 +91,7 @@ def english_cleaners2(text):
 
 def english_cleaners3(text): # needs espeak - apt-get install espeak
     text = convert_to_ascii(text)
+    text = normalize_numbers(text)
     text = expand_abbreviations(text.lower())
     phonemes = phonemize(text, language='en-us', backend='espeak', strip=True, preserve_punctuation=True,with_stress=True)
     phonemes = collapse_whitespace(phonemes)

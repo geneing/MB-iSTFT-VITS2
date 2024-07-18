@@ -8,6 +8,7 @@ import subprocess
 import numpy as np
 from scipy.io.wavfile import read
 import torch
+import librosa
 
 MATPLOTLIB_FLAG = False
 
@@ -130,9 +131,11 @@ def plot_alignment_to_numpy(alignment, info=None):
   return data
 
 
-def load_wav_to_torch(full_path):
+def load_wav_to_torch(full_path, sr):
   sampling_rate, data = read(full_path)
-  return torch.FloatTensor(data.astype(np.float32)), sampling_rate
+  if sampling_rate != sr:
+    data= librosa.resample(data.astype(np.float32), sampling_rate, sr, fix=False)
+  return torch.FloatTensor(data.astype(np.float32)), sr
 
 
 def load_filepaths_and_text(filename, split="|"):

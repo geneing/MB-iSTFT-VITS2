@@ -10,7 +10,8 @@ import attentions
 import monotonic_align
 
 from torch.nn import Conv1d, ConvTranspose1d, AvgPool1d, Conv2d
-from torch.nn.utils import weight_norm, remove_weight_norm, spectral_norm
+from torch.nn.utils.parametrizations import weight_norm, spectral_norm
+from torch.nn.utils import remove_weight_norm
 from commons import init_weights, get_padding
 
 from pqmf import PQMF
@@ -1385,15 +1386,19 @@ class SynthesizerTrn(nn.Module):
 
     def forward(self, x, x_lengths, y, y_lengths, sid=None):
         # x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
+        print(f"Before emb_g {self.n_speakers=} {self.gin_channels=} {sid=}")
+        
         if self.n_speakers > 0:
             g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
         else:
             g = None
-
+        print("Before enc_p")
         x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, g=g)  # vits2?
+        print("Before enc_q")
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
+        print("Before flow")
         z_p = self.flow(z, y_mask, g=g)
-
+        print("Before attn")
         with torch.no_grad():
             # negative cross-entropy
             s_p_sq_r = torch.exp(-2 * logs_p)  # [b, d, t]

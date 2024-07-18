@@ -47,7 +47,7 @@ global_step = 0
 
 def main():
     """Assume Single Node Multi GPUs Training Only"""
-    assert torch.cuda.is_available(), "CPU training is not allowed."
+    # assert torch.cuda.is_available(), "CPU training is not allowed."
 
     n_gpus = torch.cuda.device_count()
     os.environ['MASTER_ADDR'] = 'localhost'
@@ -55,6 +55,7 @@ def main():
 
     hps = utils.get_hparams()
     mp.spawn(run, nprocs=n_gpus, args=(n_gpus, hps,))
+    
 
 
 def run(rank, n_gpus, hps):

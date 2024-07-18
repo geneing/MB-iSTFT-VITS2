@@ -4,7 +4,8 @@ import numpy as np
 import torch
 from torch import nn
 from torch.nn import functional as F
-from torch.nn.utils import remove_weight_norm, weight_norm
+from torch.nn.utils.parametrizations import weight_norm
+from torch.nn.utils import remove_weight_norm
 
 import commons
 import modules

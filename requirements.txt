@@ -3,4 +3,4 @@ cn2an
 pyopenjtalk
 ko-pron
 g2pk2
-phonemizer
+phonemizer==2.2.1
