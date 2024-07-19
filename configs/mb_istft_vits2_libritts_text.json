@@ -3,13 +3,13 @@
       "log_interval": 200,
       "eval_interval": 1000,
       "seed": 1234,
-      "epochs": 20000,
+      "epochs": 1000,
       "learning_rate": 2e-4,
       "betas": [0.8, 0.99],
       "eps": 1e-9,
       "batch_size": 32,
       "fp16_run": false,
-      "lr_decay": 0.999875,
+      "lr_decay": 0.99995,
       "segment_size": 8192,
       "init_lr_ratio": 1,
       "warmup_epochs": 0,
@@ -22,9 +22,9 @@
     },
     "data": {
       "use_mel_posterior_encoder": true,
-      "training_files":"filelists/libritts_audio_sid_text_train_filelist.txt.cleaned",
-      "validation_files":"filelists/libritts_audio_sid_text_val_filelist.txt.cleaned",
-      "text_cleaners":["english_cleaners3"],
+      "training_files":"filelists/libritts_audio_sid_grapheme_train_filelist.txt.cleaned",
+      "validation_files":"filelists/libritts_audio_sid_grapheme_val_filelist.txt.cleaned",
+      "text_cleaners":["english_cleaners4"],
       "max_wav_value": 32768.0,
       "sampling_rate": 22050,
       "filter_length": 1024,
@@ -41,7 +41,7 @@
       "use_mel_posterior_encoder": true,
       "use_transformer_flows": true,
       "transformer_flow_type": "pre_conv2",
-      "use_spk_conditioned_encoder": false,
+      "use_spk_conditioned_encoder": true,
       "use_noise_scaled_mas": true,
       "use_duration_discriminator": true,
       "duration_discriminator_type": "dur_disc_2",
@@ -67,7 +67,7 @@
       "n_layers_q": 3,
       "use_spectral_norm": false,
       "use_sdp": false,
-      "gin_channels": 256
+      "gin_channels": 512
     }
   }
   
