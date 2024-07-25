@@ -97,6 +97,13 @@ def english_cleaners3(text): # needs espeak - apt-get install espeak
     phonemes = collapse_whitespace(phonemes)
     return phonemes
 
+def english_cleaners4(text): 
+    text = convert_to_ascii(text)
+    text = normalize_numbers(text)
+    text = expand_abbreviations(text.lower())
+    text = collapse_whitespace(text)
+    return text
+
 
 def japanese_cleaners(text):
     text = japanese_to_romaji_with_accent(text)

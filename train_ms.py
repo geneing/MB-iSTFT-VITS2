@@ -42,8 +42,21 @@ from text.symbols import symbols
 
 torch.autograd.set_detect_anomaly(True)
 torch.backends.cudnn.benchmark = True
-global_step = 0
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = (
+    True  # If encountered training problem,please try to disable TF32.
+)
+torch.set_float32_matmul_precision("medium")
+torch.backends.cuda.sdp_kernel("flash")
+torch.backends.cuda.enable_flash_sdp(True)
+torch.backends.cuda.enable_mem_efficient_sdp(
+    True
+)  # Not available if torch version is lower than 2.0
 
+
+
+global_step = 0
+FUP = False
 
 def main():
     """Assume Single Node Multi GPUs Training Only"""
@@ -202,11 +215,11 @@ def run(rank, n_gpus, hps):
     else:
         optim_dur_disc = None
 
-    net_g = DDP(net_g, device_ids=[rank], find_unused_parameters=True)
-    net_d = DDP(net_d, device_ids=[rank], find_unused_parameters=True)
+    net_g = DDP(net_g, device_ids=[rank], find_unused_parameters=FUP)
+    net_d = DDP(net_d, device_ids=[rank], find_unused_parameters=FUP)
 
     if net_dur_disc is not None:  # 2의 경우
-        net_dur_disc = DDP(net_dur_disc, device_ids=[rank], find_unused_parameters=True)
+        net_dur_disc = DDP(net_dur_disc, device_ids=[rank], find_unused_parameters=FUP)
 
     try:
         _, _, _, epoch_str = utils.load_checkpoint(utils.latest_checkpoint_path(hps.model_dir, "G_*.pth"), net_g,
