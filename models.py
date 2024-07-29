@@ -304,6 +304,7 @@ class TextEncoder(nn.Module):
         self.gin_channels = gin_channels
         self.emb = nn.Embedding(n_vocab, hidden_channels)
         nn.init.normal_(self.emb.weight, 0.0, hidden_channels ** -0.5)
+        self.bert_proj = nn.Conv1d(1024, hidden_channels, 1)
 
         self.encoder = attentions.Encoder(
             hidden_channels,
@@ -315,8 +316,9 @@ class TextEncoder(nn.Module):
             gin_channels=self.gin_channels)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
-    def forward(self, x, x_lengths, g=None):
-        x = self.emb(x) * math.sqrt(self.hidden_channels)  # [b, t, h]
+    def forward(self, x, x_lengths, bert, g=None):
+        bert_emb = self.bert_proj(bert).transpose(1, 2)
+        x = (self.emb(x)+bert_emb) * math.sqrt(self.hidden_channels)  # [b, t, h]
         x = torch.transpose(x, 1, -1)  # [b, h, t]
         x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
 
