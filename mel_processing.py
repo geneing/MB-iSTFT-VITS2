@@ -6,6 +6,7 @@ import torch
 from torch import nn
 import torch.nn.functional as F
 import torch.utils.data
+from torch.cuda.amp import autocast
 import numpy as np
 import librosa
 import librosa.util as librosa_util
@@ -66,9 +67,10 @@ def spectrogram_torch(y, n_fft, sampling_rate, hop_size, win_size, center=False)
     y = y.squeeze(1)
 
     if version.parse(torch.__version__) >= version.parse("2"):
-        spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
+        with autocast(enabled=False):
+            spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                           center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)
-        spec = torch.abs(spec) + 1e-6
+            spec = torch.abs(spec) + 1e-6
     else:
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                       center=center, pad_mode='reflect', normalized=False, onesided=True)
@@ -110,9 +112,10 @@ def mel_spectrogram_torch(y, n_fft, num_mels, sampling_rate, hop_size, win_size,
     y = y.squeeze(1)
 
     if version.parse(torch.__version__) >= version.parse("2"):
-        spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
+        with autocast(enabled=False):
+            spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                           center=center, pad_mode='reflect', normalized=False, onesided=True, return_complex=True)
-        spec = torch.abs(spec) + 1e-6
+            spec = torch.abs(spec) + 1e-6
     else:
         spec = torch.stft(y, n_fft, hop_length=hop_size, win_length=win_size, window=hann_window[wnsize_dtype_device],
                       center=center, pad_mode='reflect', normalized=False, onesided=True)
