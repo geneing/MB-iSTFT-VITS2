@@ -187,6 +187,7 @@ def run(rank, n_gpus, hps):
 
     net_g = SynthesizerTrn(
         len(symbols),
+        hps.model.n_bert_channels,
         posterior_channels,
         hps.train.segment_size // hps.data.hop_length,
         n_speakers=hps.data.n_speakers,
@@ -285,7 +286,7 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
         loader = tqdm.tqdm(train_loader, desc='Loading train data')
     else:
         loader = train_loader
-    for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths, speakers) in enumerate(loader):
+    for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths, speakers, original_texts) in enumerate(loader):
         if net_g.module.use_noise_scaled_mas:
             current_mas_noise_scale = net_g.module.mas_noise_scale_initial - net_g.module.noise_scale_delta * global_step
             net_g.module.current_mas_noise_scale = max(current_mas_noise_scale, 0.0)
@@ -293,11 +294,11 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
         spec, spec_lengths = spec.cuda(rank, non_blocking=True), spec_lengths.cuda(rank, non_blocking=True)
         y, y_lengths = y.cuda(rank, non_blocking=True), y_lengths.cuda(rank, non_blocking=True)
         speakers = speakers.cuda(rank, non_blocking=True)
-
+        
         with autocast(enabled=hps.train.fp16_run, dtype=torch.bfloat16):
             y_hat, y_hat_mb, l_length, attn, ids_slice, x_mask, z_mask, \
             (z, z_p, m_p, logs_p, m_q, logs_q), (hidden_x, logw, logw_) = net_g(x, x_lengths, spec, spec_lengths,
-                                                                                speakers)
+                                                                                speakers, original_texts)
 
             if hps.model.use_mel_posterior_encoder or hps.data.use_mel_posterior_encoder:
                 mel = spec
@@ -450,12 +451,12 @@ def train_and_evaluate(rank, epoch, hps, nets, optims, schedulers, scaler, loade
 def evaluate(hps, generator, eval_loader, writer_eval):
     generator.eval()
     with torch.no_grad():
-        for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths, speakers) in enumerate(eval_loader):
+        for batch_idx, (x, x_lengths, spec, spec_lengths, y, y_lengths, speakers, original_texts) in enumerate(eval_loader):
             x, x_lengths = x.cuda(0), x_lengths.cuda(0)
             spec, spec_lengths = spec.cuda(0), spec_lengths.cuda(0)
             y, y_lengths = y.cuda(0), y_lengths.cuda(0)
             speakers = speakers.cuda(0)
-
+            
             # remove else
             x = x[:1]
             x_lengths = x_lengths[:1]
@@ -465,7 +466,7 @@ def evaluate(hps, generator, eval_loader, writer_eval):
             y_lengths = y_lengths[:1]
             speakers = speakers[:1]
             break
-        y_hat, y_hat_mb, attn, mask, *_ = generator.module.infer(x, x_lengths, speakers, max_len=1000)
+        y_hat, y_hat_mb, attn, mask, *_ = generator.module.infer(x, x_lengths, speakers, original_texts, max_len=1000)
         y_hat_lengths = mask.sum([1, 2]).long() * hps.data.hop_length
 
         if hps.model.use_mel_posterior_encoder or hps.data.use_mel_posterior_encoder:

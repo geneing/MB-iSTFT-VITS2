@@ -16,9 +16,46 @@ from commons import init_weights, get_padding
 
 from pqmf import PQMF
 from stft import TorchSTFT, OnnxSTFT
+from text import sequence_to_text
+from transformers import DebertaV2Model, DebertaV2Tokenizer
 
 AVAILABLE_FLOW_TYPES = ["pre_conv", "pre_conv2", "fft", "mono_layer_inter_residual", "mono_layer_post_residual"]
 AVAILABLE_DURATION_DISCRIMINATOR_TYPES = {"dur_disc_1": "DurationDiscriminator", "dur_disc_2": "DurationDiscriminator2"}
+
+MODEL_NAME = 'microsoft/deberta-v3-small'
+model = DebertaV2Model.from_pretrained(MODEL_NAME)
+tokenizer = DebertaV2Tokenizer.from_pretrained(MODEL_NAME)
+
+def tokenize_bert_enc(texts, device):
+
+    encoded_input = tokenizer(texts, return_tensors='pt', padding=True)
+    output = model(**encoded_input, output_hidden_states=True)
+    bart_out = torch.cat(output["hidden_states"][-3:-2], -1)[0]
+
+    remove_whitespace = lambda c: (" " + c[1:]) if ((len(c)>0) and c[0] == "▁") else c
+    all_tensors = []
+    for encoded in encoded_input["input_ids"]:
+        converted=tokenizer.convert_ids_to_tokens(encoded)
+        tokens_nospecials = [ (c if not(c in tokenizer.all_special_tokens) else "") for c in converted ]
+
+        token_list = list(map(remove_whitespace, tokens_nospecials))
+        if len(token_list[0])==0:
+            token_list[1] = token_list[1].strip()
+        repl_list = [len(token) for token in token_list]
+    
+        repeats = torch.tensor(repl_list, device=bart_out.device)
+        # print(f"{bart_out.shape=}")
+        # print(f"{repeats.shape=}")
+        repeated_tensor = torch.repeat_interleave(bart_out, repeats, dim=0)
+        # assert repeated_tensor.shape[0] == sum(repl_list), f"{text}: {bart_out.shape=}, {repeated_tensor.shape=}, {sum(repl_list)=}"
+        # print(f"{repeated_tensor.shape=}, {sum(repl_list)=}")
+        all_tensors.append(torch.transpose(repeated_tensor,0,1))
+
+    max_rows = max(tensor.size(1) for tensor in all_tensors)
+    padded_tensors = [torch.nn.functional.pad(tensor, ( 0, max_rows - tensor.size(1), 0, 0 )) for tensor in all_tensors]
+    stacked_tensors = torch.stack(padded_tensors, dim=0)
+
+    return stacked_tensors.to(device)
 
 
 class StochasticDurationPredictor(nn.Module):
@@ -284,6 +321,7 @@ class DurationDiscriminator2(nn.Module):  # vits2 - DurationDiscriminator2
 class TextEncoder(nn.Module):
     def __init__(self,
                  n_vocab,
+                 n_bert,
                  out_channels,
                  hidden_channels,
                  filter_channels,
@@ -304,7 +342,7 @@ class TextEncoder(nn.Module):
         self.gin_channels = gin_channels
         self.emb = nn.Embedding(n_vocab, hidden_channels)
         nn.init.normal_(self.emb.weight, 0.0, hidden_channels ** -0.5)
-        self.bert_proj = nn.Conv1d(1024, hidden_channels, 1)
+        self.bert_proj = nn.Conv1d(n_bert, hidden_channels, 1)
 
         self.encoder = attentions.Encoder(
             hidden_channels,
@@ -316,9 +354,15 @@ class TextEncoder(nn.Module):
             gin_channels=self.gin_channels)
         self.proj = nn.Conv1d(hidden_channels, out_channels * 2, 1)
 
-    def forward(self, x, x_lengths, bert, g=None):
-        bert_emb = self.bert_proj(bert).transpose(1, 2)
-        x = (self.emb(x)+bert_emb) * math.sqrt(self.hidden_channels)  # [b, t, h]
+    def forward(self, x, x_lengths, g=None, original_text=None):
+        if original_text is not None:
+            bert = tokenize_bert_enc(original_text, x.device)
+            bert_emb = self.bert_proj(bert).transpose(1, 2)
+            # print(f"{bert_emb.shape=} {self.emb(x).shape=}")
+            x = (self.emb(x)+bert_emb) * math.sqrt(self.hidden_channels)  # [b, t, h]
+        else:
+            x = self.emb(x) * math.sqrt(self.hidden_channels)  # [b, t, h]
+
         x = torch.transpose(x, 1, -1)  # [b, h, t]
         x_mask = torch.unsqueeze(commons.sequence_mask(x_lengths, x.size(2)), 1).to(x.dtype)
 
@@ -1264,6 +1308,7 @@ class SynthesizerTrn(nn.Module):
 
     def __init__(self,
                  n_vocab,
+                 n_bert,
                  spec_channels,
                  segment_size,
                  inter_channels,
@@ -1330,6 +1375,7 @@ class SynthesizerTrn(nn.Module):
         else:
             self.enc_gin_channels = 0
         self.enc_p = TextEncoder(n_vocab,
+                                 n_bert, 
                                  inter_channels,
                                  hidden_channels,
                                  filter_channels,
@@ -1386,14 +1432,14 @@ class SynthesizerTrn(nn.Module):
         if n_speakers > 1:
             self.emb_g = nn.Embedding(n_speakers, gin_channels)
 
-    def forward(self, x, x_lengths, y, y_lengths, sid=None):
+    def forward(self, x, x_lengths, y, y_lengths, sid=None, original_text=None):
         # x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths)
         
         if self.n_speakers > 0:
             g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
         else:
             g = None
-        x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, g=g)  # vits2?
+        x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, g=g, original_text=original_text)  # vits2?
         z, m_q, logs_q, y_mask = self.enc_q(y, y_lengths, g=g)
         z_p = self.flow(z, y_mask, g=g)
 
@@ -1433,12 +1479,12 @@ class SynthesizerTrn(nn.Module):
         o, o_mb = self.dec(z_slice, g=g)
         return o, o_mb, l_length, attn, ids_slice, x_mask, y_mask, (z, z_p, m_p, logs_p, m_q, logs_q), (x, logw, logw_)
 
-    def infer(self, x, x_lengths, sid=None, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
+    def infer(self, x, x_lengths, sid=None, original_text=None, noise_scale=1, length_scale=1, noise_scale_w=1., max_len=None):
         if self.n_speakers > 0:
             g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
         else:
             g = None
-        x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, g=g)
+        x, m_p, logs_p, x_mask = self.enc_p(x, x_lengths, g=g, original_text=original_text)
         if self.use_sdp:
             logw = self.dp(x, x_mask, g=g, reverse=True, noise_scale=noise_scale_w)
         else:

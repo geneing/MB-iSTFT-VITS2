@@ -175,6 +175,7 @@ def run(rank, n_gpus, hps):
 
     net_g = SynthesizerTrn(
         len(symbols),
+        hps.model.n_bert_channels,
         posterior_channels,
         hps.train.segment_size // hps.data.hop_length,
         mas_noise_scale_initial=mas_noise_scale_initial,

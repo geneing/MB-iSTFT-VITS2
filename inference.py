@@ -57,6 +57,7 @@ else:
 
 net_g = SynthesizerTrn(
     len(symbols),
+    hps.model.n_bert_channels,
     posterior_channels,
     hps.train.segment_size // hps.data.hop_length,
     n_speakers=hps.data.n_speakers, #- >0 for multi speaker

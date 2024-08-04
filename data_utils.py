@@ -33,7 +33,7 @@ class TextAudioLoader(torch.utils.data.Dataset):
             self.n_mel_channels = getattr(hparams, "n_mel_channels", 80)
         self.cleaned_text = getattr(hparams, "cleaned_text", False)
 
-        self.add_blank = hparams.add_blank
+        # self.add_blank = hparams.add_blank
         self.min_text_len = getattr(hparams, "min_text_len", 1)
         self.max_text_len = getattr(hparams, "max_text_len", 190)
 
@@ -100,12 +100,13 @@ class TextAudioLoader(torch.utils.data.Dataset):
         return spec, audio_norm
 
     def get_text(self, text):
-        if self.cleaned_text:
-            text_norm = cleaned_text_to_sequence(text)
-        else:
-            text_norm = text_to_sequence(text, self.text_cleaners)
-        if self.add_blank:
-            text_norm = commons.intersperse(text_norm, 0)
+        text_norm = cleaned_text_to_sequence(text)
+        # if self.cleaned_text:
+        #     text_norm = cleaned_text_to_sequence(text)
+        # else:
+        #     text_norm = text_to_sequence(text, self.text_cleaners)
+        # if self.add_blank:
+        #     text_norm = commons.intersperse(text_norm, 0)
         text_norm = torch.LongTensor(text_norm)
         return text_norm
 
@@ -228,13 +229,13 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         self.lengths = lengths
         #print(len(self.lengths))  # if we use large corpus dataset, we can check how much time it takes.
 
-    def get_audio_text_speaker_pair(self, audiopath_sid_text):
+    def get_audio_text_speaker_tuple(self, audiopath_sid_text):
         # separate filename, speaker_id and text
         audiopath, sid, text = audiopath_sid_text[0], audiopath_sid_text[1], audiopath_sid_text[2]
-        text = self.get_text(text)
+        text_ids = self.get_text(text)
         spec, wav = self.get_audio(audiopath)
         sid = self.get_sid(sid)
-        return (text, spec, wav, sid)
+        return (text_ids, spec, wav, sid, text)
 
     def get_audio(self, filename):
         # TODO : if linear spec exists convert to mel from existing linear spec
@@ -283,7 +284,7 @@ class TextAudioSpeakerLoader(torch.utils.data.Dataset):
         return sid
 
     def __getitem__(self, index):
-        return self.get_audio_text_speaker_pair(self.audiopaths_sid_text[index])
+        return self.get_audio_text_speaker_tuple(self.audiopaths_sid_text[index])
 
     def __len__(self):
         return len(self.audiopaths_sid_text)
@@ -296,7 +297,7 @@ class TextAudioSpeakerCollate():
         self.return_ids = return_ids
 
     def __call__(self, batch):
-        """Collate's training batch from normalized text, audio and speaker identities
+        """Collate's training batch from normalized text, audio and speaker identities and original text
         PARAMS
         ------
         batch: [text_normalized, spec_normalized, wav_normalized, sid]
@@ -309,11 +310,12 @@ class TextAudioSpeakerCollate():
         max_text_len = max([len(x[0]) for x in batch])
         max_spec_len = max([x[1].size(1) for x in batch])
         max_wav_len = max([x[2].size(1) for x in batch])
-
+        
         text_lengths = torch.LongTensor(len(batch))
         spec_lengths = torch.LongTensor(len(batch))
         wav_lengths = torch.LongTensor(len(batch))
         sid = torch.LongTensor(len(batch))
+        orig_text = []
 
         text_padded = torch.LongTensor(len(batch), max_text_len)
         spec_padded = torch.FloatTensor(len(batch), batch[0][1].size(0), max_spec_len)
@@ -321,6 +323,7 @@ class TextAudioSpeakerCollate():
         text_padded.zero_()
         spec_padded.zero_()
         wav_padded.zero_()
+
         for i in range(len(ids_sorted_decreasing)):
             row = batch[ids_sorted_decreasing[i]]
 
@@ -338,9 +341,11 @@ class TextAudioSpeakerCollate():
 
             sid[i] = row[3]
 
+            orig_text.append(row[4])
+
         if self.return_ids:
-            return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, sid, ids_sorted_decreasing
-        return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, sid
+            return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, sid, ids_sorted_decreasing, orig_text
+        return text_padded, text_lengths, spec_padded, spec_lengths, wav_padded, wav_lengths, sid, orig_text
 
 
 class DistributedBucketSampler(torch.utils.data.distributed.DistributedSampler):
